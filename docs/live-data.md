@@ -17,7 +17,7 @@ Se muestran tres unidades identificadas como simuladas. Avanzan cada segundo sob
 
 La velocidad supuesta se puede editar de 5 a 60 km/h en «Ajustar estimación». Cambia tanto la velocidad de la simulación como el cálculo de duración. Es un supuesto visible, **no una velocidad medida**. Al cambiar de ruta se eliminan los camiones anteriores. Al ocultar la pestaña se pausa el avance; no se inventa un desplazamiento durante ese intervalo.
 
-Sin geometría disponible no se dibujan camiones ni un viaje: se conserva la lista de calles y se pide reintentar la carga. Las pruebas tienen datos sintéticos propios que no se incluyen como geometría de las rutas reales.
+La carga inicial utiliza geometría local real de calles OSM en `route-snapshot.js`; no depende de Overpass. Las conexiones y los sentidos del servicio siguen pendientes. Un fallo de verificación en línea no borra las calles ni la simulación. Las pruebas de cálculos tienen datos sintéticos propios, separados de la geometría precargada de producción.
 
 ## Origen, destino y duración
 
@@ -33,7 +33,7 @@ Sin geometría disponible no se dibujan camiones ni un viaje: se conserva la lis
 
 Se retiró el iframe de Waze y las pestañas que alternaban entre dos mapas. Leaflet muestra en una misma superficie las calles, camiones, origen, destino, viaje, tráfico e incidentes.
 
-El mapa incrustado público de Waze no ofrece una API de capas para añadir nuestros camiones y recorridos. Por eso la capa integrada compatible utiliza **TomTom**. Waze permanece como enlace externo opcional, no como un segundo mapa incrustado.
+El mapa incrustado público de Waze no ofrece una API de capas para añadir nuestros camiones y recorridos. La página puede usar **Google Maps con TrafficLayer** al configurar una clave de su Maps JavaScript API, o la alternativa Leaflet/OpenStreetMap mientras no exista esa clave. La integración de incidentes usa **TomTom**. Waze permanece como enlace externo opcional. Consulta [google-maps.md](google-maps.md).
 
 Para activar datos reales de tráfico, crea una clave para uso en navegador con el proveedor, restringida a los dominios de tu web y a las APIs necesarias, y configura:
 

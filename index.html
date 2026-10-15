@@ -8,14 +8,16 @@
   <title>UbiCarmen · Encuentra tu ruta</title>
   <link rel="icon" href="assets/bus.svg?v=fb9e20db9f0f" type="image/svg+xml">
   <link rel="stylesheet" href="assets/vendor/leaflet/leaflet.css?v=a78371028241">
-  <link rel="stylesheet" href="styles.css?v=2657c27e53c8">
+  <link rel="stylesheet" href="styles.css?v=37e9520187e1">
   <script src="assets/vendor/leaflet/leaflet.js?v=db49d009c841" defer></script>
-  <script src="config.js?v=54aed78b53fd" defer></script>
+  <script src="config.js?v=d4f09ebbb8b5" defer></script>
   <script src="routes.js?v=873bcdc2854d" defer></script>
+  <script src="route-snapshot.js?v=3bac934bcf77" defer></script>
   <script src="street-geometry.js?v=1e2941f5d8f2" defer></script>
   <script src="trip-planner.js?v=5052e2ac0732" defer></script>
   <script src="live-services.js?v=229a0ab83128" defer></script>
-  <script src="app.js?v=05de91455a0c" defer></script>
+  <script src="google-map.js?v=430465955c3d" defer></script>
+  <script src="app.js?v=55866292d2f7" defer></script>
 </head>
 <body>
   <svg class="icon-library" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -70,10 +72,11 @@
         <details class="reference-details" id="stop-details" hidden><summary><span id="reference-heading">Paraderos · referencias generales</span><span aria-hidden="true">⌄</span></summary><p class="list-note">Referencias generales; no indican el orden de viaje ni añaden desvíos al trazado.</p><ul id="reference-list" class="stop-list"></ul></details>
         <div class="geometry-notice"><p id="geometry-status" role="status" aria-live="polite">Localizando las calles…</p><button id="retry-geometry" class="text-button" type="button" hidden>Reintentar trazado</button></div>
         <details class="reference-details connection-details" id="connection-details" hidden><summary>Enlaces por confirmar <span aria-hidden="true">⌄</span></summary><ul id="connection-list" class="connection-list"></ul></details>
-        <p class="data-note" id="route-data-note"><svg class="icon"><use href="#i-info"/></svg><span>Solo se dibujan tramos sobre calles identificadas y entre cruces comprobados en OpenStreetMap. Los enlaces pendientes quedan sin unir. Falta precisar los cruces de inicio y final.</span></p>
+        <p class="data-note" id="route-data-note"><svg class="icon"><use href="#i-info"/></svg><span>Las calles se incluyen con la página para verlas desde el inicio. Sus conexiones, paraderos exactos y el sentido del servicio están por confirmar; los huecos no se unen con líneas ficticias.</span></p>
       </aside>
       <div class="map-panel">
         <div class="map-toolbar"><span class="single-map-label"><svg class="icon"><use href="#i-layers"/></svg> Ruta + camiones + tu viaje</span><label class="traffic-toggle"><input type="checkbox" id="traffic-toggle"> Tráfico</label></div>
+        <p class="map-provider-status" id="map-provider-status" role="status">Preparando el mapa…</p>
         <p class="traffic-status" id="traffic-status" role="status">El tráfico aún no está conectado. Puedes consultar reportes en Waze.</p>
         <div class="map-stage">
           <div id="route-map" role="region" aria-label="Mapa del recorrido seleccionado" tabindex="0"></div>
@@ -83,12 +86,12 @@
           <button class="center-button" id="center-map" type="button" title="Centrar recorrido" aria-label="Centrar el recorrido completo"><svg class="icon"><use href="#i-target"/></svg></button>
           <div class="map-status" id="tile-notice" role="status" hidden><span id="tile-notice-text">No se pudo cargar parte del mapa. Revisa tu conexión.</span><button id="retry-tiles" class="text-button" type="button">Recargar mapa</button></div>
         </div>
-        <div class="map-footer"><p id="selection-status" role="status" aria-live="polite"></p><a id="waze-link" class="waze-link" target="_blank" rel="noopener noreferrer">Abrir Waze <svg class="icon"><use href="#i-arrow"/></svg><span class="sr-only"> (abre una pestaña nueva)</span></a></div>
+        <div class="map-footer"><div><p id="selection-status" role="status" aria-live="polite"></p><a class="street-attribution" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">Calles © OpenStreetMap · ODbL</a></div><a id="waze-link" class="waze-link" target="_blank" rel="noopener noreferrer">Abrir Waze <svg class="icon"><use href="#i-arrow"/></svg><span class="sr-only"> (abre una pestaña nueva)</span></a></div>
       </div>
     </section>
     <section class="how-it-works" id="como-funciona" aria-labelledby="how-title"><div><p class="eyebrow">ASÍ DE SENCILLO</p><h2 id="how-title">Planea tu próxima vuelta.</h2></div><div class="how-step"><span>01</span><p><strong>Selecciona una ruta</strong>Las unidades simuladas recorren sus tramos.</p></div><div class="how-step"><span>02</span><p><strong>Elige origen y destino</strong>Usa tu ubicación, una dirección o el mapa.</p></div><div class="how-step"><span>03</span><p><strong>Estima tu viaje</strong>Solo en camión y siguiendo su recorrido.</p></div></section>
   </main>
-  <footer class="site-footer"><span class="footer-brand">UbiCarmen<span> · Hecho para movernos mejor.</span></span><span id="footer-mode">Proyecto independiente · Simulación de camiones; no son posiciones GPS reales</span><span id="app-version">Versión ec9136df80fd</span></footer>
+  <footer class="site-footer"><span class="footer-brand">UbiCarmen<span> · Hecho para movernos mejor.</span></span><span id="footer-mode">Proyecto independiente · Simulación de camiones; no son posiciones GPS reales</span><span id="app-version">Versión cc499d7b8646</span></footer>
   <noscript><p class="noscript">Activa JavaScript para elegir y visualizar las rutas.</p></noscript>
 </body>
 </html>

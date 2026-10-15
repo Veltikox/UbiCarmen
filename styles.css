@@ -172,6 +172,10 @@ details:not([open]) summary > span:last-child { transform: rotate(-90deg); }
 .traffic-toggle { display: flex; align-items: center; gap: 8px; font-size: 11px; white-space: nowrap; cursor: pointer; }
 .traffic-toggle input { width: 16px; height: 16px; accent-color: var(--ink); }
 .traffic-status { margin: 0; padding: 9px 20px; font-size: 10px; color: #6d7965; line-height: 1.6; background: #f7f9f4; border-bottom: 1px solid var(--line); }
+.map-provider-status { margin: 0; padding: 7px 20px; font-size: 10px; line-height: 1.6; color: #6e765f; background: #f8f6ee; border-bottom: 1px solid var(--line); }
+.map-footer > div { min-width: 0; }
+.map-footer > div > p { font-size: 10px; color: #6a7863; line-height: 1.5; margin: 0 0 4px; }
+.street-attribution { font-size: 9px; color: #65775d; text-decoration: underline; }
 .simulation-badge { position: absolute; z-index: 401; top: 20px; right: 18px; padding: 9px 10px; background: #fff6df; border: 1px solid #e9d6b2; border-radius: 7px; color: #87612b; font-size: 8px; font-weight: 700; letter-spacing: .5px; pointer-events: none; }
 .bus-marker { background: var(--route-color); border: 3px solid #fff; border-radius: 10px; box-shadow: 0 3px 9px #163f3540; display: grid; place-items: center; color: white; }
 .bus-marker.simulated { background: #bd792d; }

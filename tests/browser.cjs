@@ -29,6 +29,7 @@ async function main() {
     page.on('pageerror', error => errors.push(error.message));
     await page.route('https://tile.openstreetmap.org/**', fulfillTile);
     await page.route(endpoint, route => { requests++; return fulfillGeometry(route); });
+    await page.route(/\/config\.js(?:\?.*)?$/, route => route.fulfill({contentType:'text/javascript',body:readFileSync(require.resolve('../config.js'),'utf8').replace('preferBundled: true','preferBundled: false')}));
     await page.goto(baseURL, { waitUntil: 'networkidle' });
     await waitForRoute(page);
 
@@ -130,6 +131,7 @@ async function main() {
 
     await check('failed map tiles can be retried independently of route data', async () => {
       const broken = await browser.newPage(); let fail = true;
+      await broken.route(/\/config\.js(?:\?.*)?$/, route => route.fulfill({contentType:'text/javascript',body:readFileSync(require.resolve('../config.js'),'utf8').replace('preferBundled: true','preferBundled: false')}));
       await broken.route('https://tile.openstreetmap.org/**', route => fail ? route.abort() : fulfillTile(route));
       await broken.route(endpoint, fulfillGeometry);
       await broken.goto(baseURL, { waitUntil: 'networkidle' });
@@ -142,6 +144,7 @@ async function main() {
 
     await check('failed street service leaves all lists usable and supports a real retry', async () => {
       const broken = await browser.newPage(); let fail = true;
+      await broken.route(/\/config\.js(?:\?.*)?$/, route => route.fulfill({contentType:'text/javascript',body:readFileSync(require.resolve('../config.js'),'utf8').replace('preferBundled: true','preferBundled: false')}));
       await broken.route('https://tile.openstreetmap.org/**', fulfillTile);
       await broken.route(endpoint, route => fail ? route.fulfill({ status: 503, body: 'Unavailable' }) : fulfillGeometry(route));
       await broken.goto(baseURL, { waitUntil: 'networkidle' });
@@ -158,6 +161,7 @@ async function main() {
 
     await check('a late response never redraws a route selected earlier', async () => {
       const slow = await browser.newPage(); let release;
+      await slow.route(/\/config\.js(?:\?.*)?$/, route => route.fulfill({contentType:'text/javascript',body:readFileSync(require.resolve('../config.js'),'utf8').replace('preferBundled: true','preferBundled: false')}));
       const gate = new Promise(resolve => { release = resolve; });
       await slow.route('https://tile.openstreetmap.org/**', fulfillTile);
       await slow.route(endpoint, async route => { await gate; await fulfillGeometry(route); });

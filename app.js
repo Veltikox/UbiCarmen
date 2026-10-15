@@ -1,10 +1,13 @@
-(() => {
+(async () => {
   'use strict';
   const routes = window.UbiCarmenRoutes;
   const geometry = window.UbiCarmenGeometry;
   const trips = window.UbiCarmenTrips;
   const live = window.UbiCarmenLive;
   const config = window.UbiCarmenConfig;
+  const mapChoice = await window.UbiCarmenMaps.choose(config.map);
+  const L = mapChoice.api;
+  const usingGoogle = mapChoice.provider === 'google';
   const $ = id => document.getElementById(id);
   const select = $('route-select');
   const simulated = config.simulation?.enabled === true;
@@ -116,10 +119,10 @@
       renderIncidents();
     } catch {
       if (version !== selectionVersion) return;
-      $('geometry-status').textContent = 'No se pudieron consultar las calles. El itinerario sigue disponible; reintenta para cargar el trazado.';
+      $('geometry-status').textContent = currentResult?.segments.length ? 'No se pudieron verificar los cruces en línea. Se conservan las calles precargadas; puedes reintentar.' : 'No se pudieron consultar las calles. El itinerario sigue disponible; reintenta para cargar el trazado.';
       $('retry-geometry').hidden = false;
-      $('selection-status').textContent = `${route.name} · cartografía del recorrido pendiente`;
-      $('legend-status').textContent = 'Trazado pendiente';
+      $('selection-status').textContent = `${route.name} · ${currentResult?.segments.length ? 'calles precargadas' : 'cartografía pendiente'}`;
+      $('legend-status').textContent = currentResult?.segments.length ? 'Calles precargadas · parcial' : 'Trazado pendiente';
     } finally {
       if (version === selectionVersion) { $('route-map').setAttribute('aria-busy', 'false'); updateJourney(); renderVehicles(); }
     }
@@ -134,7 +137,16 @@
     $('legend-status').textContent = 'Localizando calles…'; $('selection-status').textContent = `${route.name} · cargando trazado`;
     $('route-map').setAttribute('aria-label', `Mapa de ruta, viaje y camiones: ${route.name}`);
     $('connection-details').hidden = true; $('connection-list').replaceChildren();
-    renderItinerary(route); updateJourney(); renderVehicles(); fitRoute(); updateWazeLink(); loadRoute(version);
+    renderItinerary(route); updateJourney(); renderVehicles(); fitRoute(); updateWazeLink();
+    const prepared = window.UbiCarmenRouteSnapshot?.routes?.[select.value];
+    if (config.routing?.preferBundled !== false && prepared?.segments?.length) {
+      currentResult = prepared; drawGeometry(prepared, route); renderIssues(prepared);
+      $('geometry-status').textContent = `${prepared.segments.length} secciones de calles precargadas de OpenStreetMap. Los enlaces entre calles y el sentido del servicio están por confirmar.`;
+      $('legend-status').textContent = 'Calles precargadas · conexiones pendientes';
+      $('selection-status').textContent = `${route.name} · calles disponibles desde el inicio`;
+      $('retry-geometry').textContent = 'Verificar cruces en línea'; $('retry-geometry').hidden = false;
+      $('route-map').setAttribute('aria-busy', 'false'); updateJourney(); renderIncidents();
+    } else loadRoute(version);
   }
   function updateJourney() {
     removeLayer(tripLayer); tripLayer = null;
@@ -274,6 +286,7 @@
   function renderIncidents() {
     removeLayer(incidentLayer); incidentLayer = null; $('incident-list').replaceChildren();
     if (!$('traffic-toggle').checked) { $('incident-status').textContent = 'Activa Tráfico para consultar avisos del proveedor. Sin conexión no se puede afirmar que la ruta esté libre.'; return; }
+    if (incidentsState === 'unavailable') { $('incident-status').textContent = 'El flujo de tráfico de Google se muestra en el mapa. Para listar cierres, obras o accidentes hace falta conectar el proveedor de incidentes.'; return; }
     if (incidentsState === 'error') { $('incident-status').textContent = 'No se pudieron consultar los incidentes. No se conoce el estado de esta ruta.'; return; }
     if (incidentsState !== 'ready') { $('incident-status').textContent = 'Consultando incidentes actuales…'; return; }
     if (!currentResult?.segments.length) { $('incident-status').textContent = 'Falta cargar el trazado para identificar qué incidentes están cerca de esta ruta.'; return; }
@@ -314,8 +327,15 @@
     clearTimeout(incidentTimer); incidentController?.abort();
     incidents = []; incidentsState = 'off';
     const enabled = $('traffic-toggle').checked;
+    if (usingGoogle && map) L.setTraffic(map, enabled);
     removeLayer(trafficLayer); trafficLayer = null;
     if (!enabled) { $('traffic-status').textContent = 'Tráfico e incidentes desactivados. Waze está disponible como consulta externa.'; renderIncidents(); return; }
+    if (usingGoogle && map) {
+      $('traffic-status').textContent = 'Capa de tráfico de Google en el mismo mapa. No modifica el tiempo supuesto del viaje.';
+      if (config.traffic.tomtomBrowserKey) refreshIncidents(version);
+      else { incidentsState = 'unavailable'; renderIncidents(); }
+      return;
+    }
     const url = live.trafficURL(config.traffic.tomtomBrowserKey);
     if (!url || !map) { $('traffic-toggle').checked = false; $('traffic-status').textContent = 'La capa de tráfico aún no está conectada. Puedes consultar los reportes en Waze.'; renderIncidents(); return; }
     $('traffic-status').textContent = 'Cargando el tráfico en este mismo mapa…';
@@ -332,16 +352,20 @@
   $('pause-simulation').hidden = !simulated;
   $('refresh-vehicles').hidden = simulated || !config.vehicles.url;
   $('simulation-badge').hidden = !simulated;
+  $('map-provider-status').textContent = mapChoice.message;
+  if (usingGoogle) $('traffic-status').textContent = 'Activa Tráfico para ver el flujo vial de Google en este mismo mapa.';
   $('footer-mode').textContent = simulated ? 'Proyecto independiente · Simulación de camiones; no son posiciones GPS reales' : 'Proyecto independiente · Posiciones proporcionadas por el servicio GPS configurado';
   if (typeof L !== 'undefined') {
     map = L.map('route-map', { zoomControl: false, scrollWheelZoom: false });
     map.createPane('trafficPane'); map.getPane('trafficPane').style.zIndex = '350';
     L.control.zoom({ position: 'bottomright' }).addTo(map);
+    if (!usingGoogle) {
     tiles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, keepBuffer: 3, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors' }).addTo(map);
     const failedTiles = new Set(); const tileKey = event => `${event.coords.z}/${event.coords.x}/${event.coords.y}`;
     const updateTileNotice = () => { $('tile-notice').hidden = !failedTiles.size; };
     tiles.on('tileerror', event => { failedTiles.add(tileKey(event)); updateTileNotice(); });
     tiles.on('tileload tileunload', event => { failedTiles.delete(tileKey(event)); updateTileNotice(); });
+    }
     map.on('click', event => {
       if (pickMode === 'origin') { stopLocation(); setOrigin([event.latlng.lat, event.latlng.lng]); setPickMode(null); fitRoute(); }
       else if (pickMode === 'destination') setDestination([event.latlng.lat, event.latlng.lng]);
