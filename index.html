@@ -4,13 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#163f35">
-  <meta name="description" content="Explora las rutas de Amor x Carmen y consulta el tráfico en Waze. Prototipo con recorridos de ejemplo en Ciudad del Carmen.">
+  <meta name="description" content="Consulta las calles de las rutas Campus III, Laguna de Términos y Costera de Amor x Carmen, en su orden de recorrido.">
   <title>UbiCarmen · Encuentra tu ruta</title>
   <link rel="icon" href="assets/bus.svg" type="image/svg+xml">
   <link rel="stylesheet" href="assets/vendor/leaflet/leaflet.css">
   <link rel="stylesheet" href="styles.css">
   <script src="assets/vendor/leaflet/leaflet.js" defer></script>
   <script src="routes.js" defer></script>
+  <script src="street-geometry.js" defer></script>
   <script src="app.js" defer></script>
 </head>
 <body>
@@ -31,7 +32,7 @@
   <main>
     <section class="intro" aria-labelledby="page-title">
       <div><p class="eyebrow"><span></span> AMOR X CARMEN · RUTAS DE CAMIÓN</p><h1 id="page-title">Tu ciudad, <span>a un recorrido.</span></h1><p class="intro-copy">Encuentra tu ruta y consulta el tráfico antes de salir.</p></div>
-      <div class="demo-badge"><svg class="icon"><use href="#i-info"/></svg><span>Vista de demostración<small>Recorridos de ejemplo, por confirmar</small></span></div>
+      <div class="demo-badge"><svg class="icon"><use href="#i-info"/></svg><span>Itinerarios actualizados<small>Conexiones y paradas exactas por confirmar</small></span></div>
     </section>
     <section class="explorer" aria-label="Explorador de rutas">
       <aside class="sidebar">
@@ -39,12 +40,15 @@
         <label class="input-label" for="route-select">¿QUÉ RUTA BUSCAS?</label>
         <div class="select-wrap"><span class="route-dot" aria-hidden="true"></span><select id="route-select" aria-describedby="route-data-note"><option value="campus">Campus III</option><option value="laguna">Laguna de Términos</option><option value="costera">Ruta Costera</option></select></div>
         <div class="route-card">
-          <div class="route-card-top"><span id="route-category" class="route-category">RUTA 01</span><span class="example-label">EJEMPLO</span></div>
+          <div class="route-card-top"><span id="route-category" class="route-category">RUTA 01</span><span class="example-label">CALLES EN ORDEN</span></div>
           <h3 id="route-name">Campus III</h3><p id="route-description"></p>
-          <div class="route-metrics"><div><svg class="icon"><use href="#i-pin"/></svg><strong id="reference-count">3 referencias</strong><small>En el mapa de ejemplo</small></div><div><svg class="icon"><use href="#i-clock"/></svg><strong>Por confirmar</strong><small>Duración del recorrido</small></div></div>
+          <div class="route-metrics"><div><svg class="icon"><use href="#i-pin"/></svg><strong id="reference-count">13 tramos</strong><small>En el itinerario indicado</small></div><div><svg class="icon"><use href="#i-clock"/></svg><strong>Por confirmar</strong><small>Duración del recorrido</small></div></div>
         </div>
-        <details class="reference-details" open><summary>Puntos de referencia <span aria-hidden="true">⌄</span></summary><ol id="reference-list" class="reference-list"></ol></details>
-        <p class="data-note" id="route-data-note"><svg class="icon"><use href="#i-info"/></svg><span>El trazado es ilustrativo. Los puntos no representan paradas oficiales. Faltan los recorridos y horarios confirmados.</span></p>
+        <details class="reference-details" open><summary>Calles en orden de recorrido <span aria-hidden="true">⌄</span></summary><ol id="street-list" class="reference-list street-list"></ol></details>
+        <details class="reference-details" id="stop-details" hidden><summary><span id="reference-heading">Paraderos · referencias generales</span><span aria-hidden="true">⌄</span></summary><p class="list-note">Referencias generales; no indican el orden de viaje ni añaden desvíos al trazado.</p><ul id="reference-list" class="stop-list"></ul></details>
+        <div class="geometry-notice"><p id="geometry-status" role="status" aria-live="polite">Localizando las calles…</p><button id="retry-geometry" class="text-button" type="button" hidden>Reintentar trazado</button></div>
+        <details class="reference-details connection-details" id="connection-details" hidden><summary>Enlaces por confirmar <span aria-hidden="true">⌄</span></summary><ul id="connection-list" class="connection-list"></ul></details>
+        <p class="data-note" id="route-data-note"><svg class="icon"><use href="#i-info"/></svg><span>Solo se dibujan tramos sobre calles identificadas y entre cruces comprobados en OpenStreetMap. Los enlaces pendientes quedan sin unir. Falta precisar los cruces de inicio y final.</span></p>
         <div class="traffic-card"><span class="traffic-icon"><svg class="icon"><use href="#i-layers"/></svg></span><div><h3>Antes de salir, revisa el tráfico</h3><p>Consulta reportes de incidentes y circulación en Waze.</p></div><button id="show-traffic" class="text-button" type="button">Consultar tráfico <svg class="icon"><use href="#i-arrow"/></svg></button></div>
       </aside>
       <div class="map-panel">
@@ -52,9 +56,9 @@
         <div class="map-stage">
           <div id="route-map" role="region" aria-label="Mapa del recorrido seleccionado"></div>
           <div id="waze-panel" hidden><iframe id="waze-frame" title="Tráfico de Ciudad del Carmen en Waze" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe><div class="waze-note">Waze muestra tráfico vial; no calcula tiempos del camión ni dibuja esta ruta. Si no carga, usa «Abrir Waze».</div></div>
-          <div class="map-label" id="map-label"><span class="route-dot"></span><div><strong id="legend-name">Campus III</strong><span>Recorrido ilustrativo</span></div></div>
+          <div class="map-label" id="map-label"><span class="route-dot"></span><div><strong id="legend-name">Campus III</strong><span id="legend-status">Localizando calles…</span></div></div>
           <button class="center-button" id="center-map" type="button" title="Centrar recorrido" aria-label="Centrar el recorrido completo"><svg class="icon"><use href="#i-target"/></svg></button>
-          <p class="map-status" id="map-status" role="status">Cargando mapa…</p>
+          <div class="map-status" id="tile-notice" role="status" hidden>No se pudo cargar parte del mapa. Revisa tu conexión.<button id="retry-tiles" class="text-button" type="button">Recargar mapa</button></div>
         </div>
         <div class="map-footer"><p id="selection-status" role="status" aria-live="polite"></p><a id="waze-link" class="waze-link" target="_blank" rel="noopener noreferrer">Abrir Waze <svg class="icon"><use href="#i-arrow"/></svg><span class="sr-only"> (abre una pestaña nueva)</span></a></div>
       </div>

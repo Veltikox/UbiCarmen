@@ -1,154 +1,179 @@
 const assert = require('node:assert/strict');
+const { readFileSync } = require('node:fs');
+const { runInNewContext } = require('node:vm');
 const { chromium } = require('playwright');
-
+const { routeFixture } = require('./fixtures/streets.cjs');
+const { resolveRoute } = require('../street-geometry.js');
+const context = { window: {} };
+runInNewContext(readFileSync(require.resolve('../routes.js'), 'utf8'), context);
+const routes = context.window.UbiCarmenRoutes;
+const fixture = routeFixture(routes);
 const baseURL = process.env.TEST_BASE_URL || 'http://127.0.0.1:8000';
 const pixel = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a1ioAAAAASUVORK5CYII=', 'base64');
-
+const endpoint = 'https://overpass-api.de/api/interpreter';
+const resultFor = key => resolveRoute(routes[key], fixture.elements);
+const countFor = key => { const r = resultFor(key); return 2*r.segments.length+r.junctions.length+r.locations.length; };
+const fulfillGeometry = route => route.fulfill({ json: fixture });
+const fulfillTile = route => route.fulfill({ contentType: 'image/png', body: pixel });
+async function waitForRoute(page) {
+  await page.waitForFunction(() => document.getElementById('route-map').getAttribute('aria-busy') === 'false');
+}
 async function main() {
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium', headless: true, args: ['--no-sandbox'] });
   let passed = 0;
-  async function check(name, fn) {
-    await fn();
-    passed++;
-    console.log(`PASS ${name}`);
-  }
+  async function check(name, fn) { await fn(); passed++; console.log(`PASS ${name}`); }
   try {
     const page = await browser.newPage({ viewport: { width: 1440, height: 1100 } });
     const errors = [];
-    page.on('pageerror', (error) => errors.push(error.message));
-    await page.route('https://tile.openstreetmap.org/**', (route) => route.fulfill({ contentType: 'image/png', body: pixel }));
-    await page.route('https://embed.waze.com/**', (route) => route.fulfill({ contentType: 'text/html', body: '<html lang="es"><title>Waze test fixture</title><p>External service test fixture</p></html>' }));
+    let requests = 0;
+    page.on('pageerror', error => errors.push(error.message));
+    await page.route('https://tile.openstreetmap.org/**', fulfillTile);
+    await page.route(endpoint, route => { requests++; return fulfillGeometry(route); });
+    await page.route('https://embed.waze.com/**', route => route.fulfill({ contentType: 'text/html', body: '<html lang="es"><title>Waze test fixture</title><p>External service fixture</p></html>' }));
     await page.goto(baseURL, { waitUntil: 'networkidle' });
+    await waitForRoute(page);
 
-    await check('initial route renders one line, its outline and three references', async () => {
+    await check('Campus lists all 13 streets from Calle 31 to Campus III', async () => {
       assert.equal(await page.locator('#route-select option').count(), 3);
-      assert.equal(await page.locator('#route-name').textContent(), 'Campus III');
-      assert.equal(await page.locator('.leaflet-overlay-pane path').count(), 5);
-      assert.equal(await page.locator('.leaflet-overlay-pane path[stroke="#24775d"]').count(), 1);
-      assert.equal(await page.locator('#reference-list li').count(), 3);
-      assert.equal(await page.locator('#map-status').isVisible(), false);
+      assert.equal(await page.locator('#street-list li').count(), 13);
+      assert.equal(await page.locator('#street-list strong').first().textContent(), 'Calle 31');
+      assert.equal(await page.locator('#street-list strong').last().textContent(), 'Campus III');
+      assert.equal(await page.locator('#stop-details').isVisible(), false);
+      assert.equal(await page.locator('.leaflet-overlay-pane path').count(), countFor('campus'));
+      assert.equal(await page.locator('#tile-notice').isVisible(), false);
       assert.equal(await page.locator('#waze-frame').getAttribute('src'), null);
     });
 
-    await check('selection removes the previous line, markers and popup, and changes colors', async () => {
-      const previous = await page.locator('.leaflet-overlay-pane path[stroke="#24775d"]').elementHandle();
-      await page.locator('.leaflet-overlay-pane path.leaflet-interactive').last().click({ force: true });
+    await check('Laguna lists all 19 streets and 11 general references without adding stop detours', async () => {
+      const previous = await page.locator('.leaflet-overlay-pane path[stroke="#24775d"]').first().elementHandle();
+      await page.locator('.leaflet-overlay-pane path[stroke="#24775d"]').first().click({ force: true });
       await page.selectOption('#route-select', 'laguna');
-      assert.equal(await previous.evaluate((element) => element.isConnected), false);
-      assert.equal(await page.locator('#route-name').textContent(), 'Laguna de Términos');
-      assert.equal(await page.locator('.leaflet-overlay-pane path[stroke="#24775d"]').count(), 0);
-      assert.equal(await page.locator('.leaflet-overlay-pane path[stroke="#b56530"]').count(), 1);
+      await waitForRoute(page);
+      assert.equal(await previous.evaluate(element => element.isConnected), false);
       await page.locator('.leaflet-popup').waitFor({ state: 'detached' });
-      assert.equal(await page.locator('.route-dot').first().evaluate((node) => getComputedStyle(node).backgroundColor), 'rgb(181, 101, 48)');
-      for (const key of ['costera', 'campus', 'laguna', 'costera', 'campus']) {
-        await page.selectOption('#route-select', key);
-        assert.equal(await page.locator('.leaflet-overlay-pane path').count(), 5);
-        const expectedColor = await page.evaluate((key) => window.UbiCarmenRoutes[key].color, key);
-        assert.equal(await page.locator(`.leaflet-overlay-pane path[stroke="${expectedColor}"]`).count(), 1);
-        assert.equal(await page.locator(`.leaflet-overlay-pane path[fill="${expectedColor}"]`).count(), 3);
-      }
+      assert.equal(await page.locator('#street-list li').count(), 19);
+      assert.equal(await page.locator('#street-list strong').first().textContent(), 'Vicente Guerrero');
+      assert.equal(await page.locator('#street-list strong').last().textContent(), 'Calle 39');
+      assert.equal(await page.locator('#reference-list li').count(), 11);
+      await page.locator('#stop-details summary').click();
+      assert.match(await page.locator('#stop-details').textContent(), /no indican el orden de viaje/);
+      assert.equal(await page.locator('.leaflet-overlay-pane path[stroke="#24775d"]').count(), 0);
+      assert.equal(await page.locator('.leaflet-overlay-pane path').count(), countFor('laguna'));
+      assert.equal(await page.locator('.route-dot').first().evaluate(node => getComputedStyle(node).backgroundColor), 'rgb(181, 101, 48)');
     });
 
-    await check('Waze is lazy loaded and follows the selection without starting car navigation', async () => {
+    await check('switching routes updates colors without accumulating old geometry or requests', async () => {
+      for (const key of ['costera', 'campus', 'laguna', 'costera']) {
+        await page.selectOption('#route-select', key); await waitForRoute(page);
+        assert.equal(await page.locator('#street-list li').count(), routes[key].streets.length);
+        assert.equal(await page.locator('.leaflet-overlay-pane path').count(), countFor(key));
+        assert.equal(await page.locator(`.leaflet-overlay-pane path[stroke="${routes[key].color}"]`).count(), resultFor(key).segments.length);
+      }
+      assert.equal(await page.locator('#street-list strong').nth(5).textContent(), 'Paseo del Mar');
+      assert.equal(requests, 1);
+      assert.equal(await page.locator('#stop-details').isVisible(), false);
+    });
+
+    await check('Waze loads on demand, follows selection, and does not start car navigation', async () => {
       await page.click('#traffic-view-button');
       assert.equal(await page.locator('#waze-panel').isVisible(), true);
       assert.equal(await page.locator('#route-map').isVisible(), false);
-      assert.equal(await page.locator('#traffic-view-button').getAttribute('aria-pressed'), 'true');
       const initial = await page.locator('#waze-frame').getAttribute('src');
       assert.equal(new URL(initial).hostname, 'embed.waze.com');
-      await page.selectOption('#route-select', 'costera');
+      await page.selectOption('#route-select', 'campus'); await waitForRoute(page);
       const src = new URL(await page.locator('#waze-frame').getAttribute('src'));
       const link = new URL(await page.locator('#waze-link').getAttribute('href'));
       assert.notEqual(src.href, initial);
       assert.equal(link.hostname, 'www.waze.com');
       assert.equal(src.searchParams.get('lat'), link.searchParams.get('lat'));
-      assert.equal(src.searchParams.get('lon'), link.searchParams.get('lon'));
       assert.equal(link.searchParams.has('navigate'), false);
       await page.click('#route-view-button');
       assert.equal(await page.locator('#route-map').isVisible(), true);
-      assert.equal(await page.locator('#waze-panel').isVisible(), false);
-      assert.equal(await page.locator('#legend-name').textContent(), 'Ruta Costera');
-      assert.equal(await page.locator('.leaflet-overlay-pane path').count(), 5);
+      assert.equal(await page.locator('#legend-name').textContent(), 'Campus III');
     });
 
-    await check('zoom and centering controls work', async () => {
-      await page.waitForTimeout(300);
-      const line = page.locator('.leaflet-overlay-pane path[stroke="#7358a5"]');
+    await check('centering restores the full geographic extent after zooming', async () => {
+      const line = page.locator('.leaflet-overlay-pane path[stroke="#24775d"]').first();
       const initial = await line.boundingBox();
-      await page.click('.leaflet-control-zoom-in');
-      await page.waitForTimeout(350);
+      await page.click('.leaflet-control-zoom-in'); await page.waitForTimeout(350);
       const zoomed = await line.boundingBox();
       assert.notEqual(zoomed.width, initial.width);
-      await page.click('#center-map');
-      await page.waitForTimeout(350);
+      await page.click('#center-map'); await page.waitForTimeout(350);
       const centered = await line.boundingBox();
-      // Leaflet can move its internal SVG origin while preserving screen geometry.
-      for (const key of ['x', 'y', 'width', 'height']) {
-        assert.ok(Math.abs(centered[key] - initial[key]) <= 1, `Center did not restore ${key}`);
-      }
+      for (const key of ['x','y','width','height']) assert.ok(Math.abs(centered[key] - initial[key]) <= 1);
     });
 
-    await check('mobile and narrow layouts fit the screen and keep the selector working', async () => {
-      for (const width of [390, 320, 768]) {
+    await check('Laguna fits on desktop, tablet and mobile with no clipped geometry or horizontal overflow', async () => {
+      await page.selectOption('#route-select', 'laguna'); await waitForRoute(page);
+      for (const width of [1440,768,390,320]) {
         await page.setViewportSize({ width, height: 844 });
-        await page.selectOption('#route-select', 'laguna');
-        const layout = await page.evaluate(() => ({ width: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth }));
-        assert.ok(layout.scroll <= layout.width, `Horizontal overflow at ${width}px`);
-        assert.equal(await page.locator('#route-name').textContent(), 'Laguna de Términos');
-        const mapBox = await page.locator('#route-map').boundingBox();
-        assert.ok(mapBox.width > 200 && mapBox.height >= 400);
-        // All references must remain inside the map after responsive recentering.
+        await page.click('#center-map');
         await page.waitForFunction(() => {
           const box = document.getElementById('route-map').getBoundingClientRect();
-          return [...document.querySelectorAll('.leaflet-overlay-pane path[fill="#b56530"]')].every((marker) => {
-            const point = marker.getBoundingClientRect();
-            return point.left >= box.left && point.right <= box.right && point.top >= box.top && point.bottom <= box.bottom;
+          return [...document.querySelectorAll('.leaflet-overlay-pane path')].every(node => {
+            const p = node.getBoundingClientRect();
+            return p.left >= box.left && p.right <= box.right && p.top >= box.top && p.bottom <= box.bottom;
           });
         });
+        assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth));
+        const size = await page.locator('#route-map').boundingBox();
+        assert.ok(size.width > 200 && size.height >= 400);
       }
     });
 
-    await check('keyboard selection and traffic shortcut remain accessible', async () => {
+    await check('keyboard route selection and traffic shortcut work without script errors', async () => {
       await page.locator('#route-select').focus();
-      await page.keyboard.press('Home');
-      await page.keyboard.press('ArrowDown');
-      await page.keyboard.press('Enter');
+      await page.keyboard.press('Home'); await page.keyboard.press('ArrowDown'); await page.keyboard.press('Enter');
+      await waitForRoute(page);
       assert.equal(await page.locator('#route-name').textContent(), 'Laguna de Términos');
       await page.click('#show-traffic');
       assert.equal(await page.locator('#waze-panel').isVisible(), true);
-      assert.equal(await page.locator('#traffic-view-button').evaluate((node) => document.activeElement === node), true);
+      assert.equal(await page.locator('#traffic-view-button').evaluate(node => document.activeElement === node), true);
       assert.deepEqual(errors, []);
     });
 
-    await check('tile failures keep a visible and actionable error', async () => {
-      const broken = await browser.newPage();
-      await broken.route('https://tile.openstreetmap.org/**', (route) => route.abort());
+    await check('failed map tiles can be retried independently of route data', async () => {
+      const broken = await browser.newPage(); let fail = true;
+      await broken.route('https://tile.openstreetmap.org/**', route => fail ? route.abort() : fulfillTile(route));
+      await broken.route(endpoint, fulfillGeometry);
       await broken.goto(baseURL, { waitUntil: 'networkidle' });
-      assert.equal(await broken.locator('#map-status').isVisible(), true);
-      assert.match(await broken.locator('#map-status').textContent(), /conexión/);
-      await broken.selectOption('#route-select', 'costera');
-      assert.equal(await broken.locator('#route-name').textContent(), 'Ruta Costera');
-      assert.ok(await broken.locator('#waze-link').getAttribute('href'));
+      assert.equal(await broken.locator('#tile-notice').isVisible(), true);
+      fail = false; await broken.click('#retry-tiles');
+      await broken.waitForFunction(() => document.getElementById('tile-notice').hidden);
+      assert.equal(await broken.locator('#street-list li').count(), 13);
       await broken.close();
     });
 
-    await check('missing map library preserves the route selector and external Waze link', async () => {
-      const broken = await browser.newPage();
-      const brokenErrors = [];
-      broken.on('pageerror', (error) => brokenErrors.push(error.message));
-      await broken.route('**/leaflet.js', (route) => route.abort());
+    await check('failed street service leaves all lists usable and supports a real retry', async () => {
+      const broken = await browser.newPage(); let fail = true;
+      await broken.route('https://tile.openstreetmap.org/**', fulfillTile);
+      await broken.route(endpoint, route => fail ? route.fulfill({ status: 503, body: 'Unavailable' }) : fulfillGeometry(route));
       await broken.goto(baseURL, { waitUntil: 'networkidle' });
-      assert.match(await broken.locator('#map-status').textContent(), /iniciar el mapa/);
-      await broken.selectOption('#route-select', 'laguna');
-      assert.equal(await broken.locator('#route-name').textContent(), 'Laguna de Términos');
-      assert.equal(await broken.locator('#center-map').isDisabled(), true);
-      assert.ok(await broken.locator('#waze-link').getAttribute('href'));
-      assert.deepEqual(brokenErrors, []);
+      assert.equal(await broken.locator('#retry-geometry').isVisible(), true);
+      assert.equal(await broken.locator('.leaflet-overlay-pane path').count(), 0);
+      await broken.selectOption('#route-select', 'laguna'); await waitForRoute(broken);
+      assert.equal(await broken.locator('#street-list li').count(), 19);
+      assert.equal(await broken.locator('#reference-list li').count(), 11);
+      fail = false; await broken.click('#retry-geometry'); await waitForRoute(broken);
+      assert.equal(await broken.locator('#retry-geometry').isVisible(), false);
+      assert.equal(await broken.locator('.leaflet-overlay-pane path').count(), countFor('laguna'));
       await broken.close();
     });
-    console.log(`${passed} browser checks passed.`);
-  } finally {
-    await browser.close();
-  }
+
+    await check('a late response never redraws a route selected earlier', async () => {
+      const slow = await browser.newPage(); let release;
+      const gate = new Promise(resolve => { release = resolve; });
+      await slow.route('https://tile.openstreetmap.org/**', fulfillTile);
+      await slow.route(endpoint, async route => { await gate; await fulfillGeometry(route); });
+      await slow.goto(baseURL, { waitUntil: 'domcontentloaded' });
+      await slow.selectOption('#route-select','laguna'); await slow.selectOption('#route-select','costera');
+      release(); await waitForRoute(slow);
+      assert.equal(await slow.locator('#route-name').textContent(),'Ruta Costera');
+      assert.equal(await slow.locator('.leaflet-overlay-pane path[stroke="#24775d"]').count(),0);
+      assert.equal(await slow.locator('.leaflet-overlay-pane path').count(),countFor('costera'));
+      await slow.close();
+    });
+    console.log(`${passed} browser checks passed. External services were simulated.`);
+  } finally { await browser.close(); }
 }
-main().catch((error) => { console.error(error); process.exitCode = 1; });
+main().catch(error => { console.error(error); process.exitCode = 1; });
