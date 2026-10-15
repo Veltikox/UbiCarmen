@@ -16,7 +16,7 @@ const pixel = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQ
 async function prepare(page, traffic = false) {
   await page.route('https://tile.openstreetmap.org/**',route=>route.fulfill({contentType:'image/png',body:pixel}));
   await page.route('https://overpass-api.de/api/interpreter',route=>route.fulfill({json:data}));
-  if(traffic) await page.route('**/config.js',route=>route.fulfill({contentType:'text/javascript',body:readFileSync(require.resolve('../config.js'),'utf8').replace("tomtomBrowserKey: ''","tomtomBrowserKey: 'PUBLIC-TEST-KEY'")}));
+  if(traffic) await page.route(/\/config\.js(?:\?.*)?$/,route=>route.fulfill({contentType:'text/javascript',body:readFileSync(require.resolve('../config.js'),'utf8').replace("tomtomBrowserKey: ''","tomtomBrowserKey: 'PUBLIC-TEST-KEY'")}));
   await page.goto(baseURL,{waitUntil:'networkidle'});
   await page.waitForFunction(()=>document.getElementById('route-map').getAttribute('aria-busy')==='false');
 }

@@ -12,6 +12,20 @@ python3 -m http.server 8000 --bind 0.0.0.0
 
 No requiere compilación, npm, backend ni claves de API. Es compatible con alojamiento estático como GitHub Pages. Leaflet 1.9.4 se incluye localmente con su licencia.
 
+## Publicación y caché
+
+Sitio de GitHub Pages: <https://veltikox.github.io/UbiCarmen/>. La lista de archivos de `github.com/Veltikox/UbiCarmen` muestra el código; el sitio web se abre en el enlace de Pages.
+
+Antes de subir cambios del frontend, ejecuta:
+
+```sh
+python3 scripts/version-assets.py
+```
+
+Esto añade una huella de contenido a las URLs locales de JavaScript, CSS y el favicon, actualiza `version.json` y muestra el identificador en el pie de página. Así una página actualizada solicita los recursos nuevos. El script es repetible y no necesita dependencias.
+
+Si el navegador conserva el HTML anterior, abre el sitio con `?v=VERSION` (el identificador de `version.json`) o realiza una recarga completa. La versión visible permite comprobar qué publicación estás viendo. El despliegue se verifica en la pestaña Actions de GitHub; un push exitoso por sí solo no confirma una publicación.
+
 ## Itinerarios
 
 `routes.js` contiene las listas suministradas por el responsable del proyecto, respetando su orden:

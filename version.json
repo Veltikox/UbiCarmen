@@ -1,0 +1,15 @@
+{
+  "version": "ec9136df80fd",
+  "assets": {
+    "assets/bus.svg": "fb9e20db9f0f",
+    "assets/vendor/leaflet/leaflet.css": "a78371028241",
+    "styles.css": "2657c27e53c8",
+    "assets/vendor/leaflet/leaflet.js": "db49d009c841",
+    "config.js": "54aed78b53fd",
+    "routes.js": "873bcdc2854d",
+    "street-geometry.js": "1e2941f5d8f2",
+    "trip-planner.js": "5052e2ac0732",
+    "live-services.js": "229a0ab83128",
+    "app.js": "05de91455a0c"
+  }
+}
