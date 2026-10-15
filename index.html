@@ -10,8 +10,11 @@
   <link rel="stylesheet" href="assets/vendor/leaflet/leaflet.css">
   <link rel="stylesheet" href="styles.css">
   <script src="assets/vendor/leaflet/leaflet.js" defer></script>
+  <script src="config.js" defer></script>
   <script src="routes.js" defer></script>
   <script src="street-geometry.js" defer></script>
+  <script src="trip-planner.js" defer></script>
+  <script src="live-services.js" defer></script>
   <script src="app.js" defer></script>
 </head>
 <body>
@@ -31,7 +34,7 @@
   </header>
   <main>
     <section class="intro" aria-labelledby="page-title">
-      <div><p class="eyebrow"><span></span> AMOR X CARMEN · RUTAS DE CAMIÓN</p><h1 id="page-title">Tu ciudad, <span>a un recorrido.</span></h1><p class="intro-copy">Encuentra tu ruta y consulta el tráfico antes de salir.</p></div>
+      <div><p class="eyebrow"><span></span> AMOR X CARMEN · RUTAS DE CAMIÓN</p><h1 id="page-title">Tu ciudad, <span>a un recorrido.</span></h1><p class="intro-copy">Tu origen, tu destino y el recorrido del camión, en un solo mapa.</p></div>
       <div class="demo-badge"><svg class="icon"><use href="#i-info"/></svg><span>Itinerarios actualizados<small>Conexiones y paradas exactas por confirmar</small></span></div>
     </section>
     <section class="explorer" aria-label="Explorador de rutas">
@@ -39,6 +42,25 @@
         <div class="sidebar-heading"><span class="step-number">01</span><div><h2>Elige tu recorrido</h2><p>Una ruta a la vez, todo más claro.</p></div></div>
         <label class="input-label" for="route-select">¿QUÉ RUTA BUSCAS?</label>
         <div class="select-wrap"><span class="route-dot" aria-hidden="true"></span><select id="route-select" aria-describedby="route-data-note"><option value="campus">Campus III</option><option value="laguna">Laguna de Términos</option><option value="costera">Ruta Costera</option></select></div>
+        <section class="trip-panel" aria-labelledby="trip-heading">
+          <h3 id="trip-heading">¿A dónde vamos?</h3>
+          <div class="origin-actions"><button id="locate-user" class="primary-button" type="button"><svg class="icon"><use href="#i-target"/></svg> Mi ubicación</button><button id="pick-origin" class="secondary-button" type="button" aria-pressed="false">Marcar origen</button></div>
+          <p id="origin-status" class="field-help" role="status">Elige tu ubicación o marca el origen en el mapa.</p>
+          <button id="stop-location" class="small-button" type="button" hidden>Detener seguimiento</button>
+          <form id="destination-form">
+            <label class="input-label" for="destination-input">TU DESTINO</label>
+            <div class="destination-field"><input id="destination-input" type="text" maxlength="200" placeholder="Dirección o lugar" autocomplete="off" required><button id="destination-submit" class="secondary-button" type="submit">Buscar</button></div>
+          </form>
+          <div class="destination-actions"><button id="pick-destination" class="small-button" type="button" aria-pressed="false">Marcar destino en el mapa</button><button id="clear-trip" class="small-button muted-button" type="button">Limpiar</button></div>
+          <p id="search-status" class="field-help" role="status"></p>
+          <ul id="search-results" class="search-results" aria-label="Resultados de destinos" hidden></ul>
+          <div class="trip-estimate"><div><small>SOLO EN CAMIÓN · ESTIMADO</small><strong id="ride-time">—</strong></div><div><small>TRAYECTO</small><strong id="ride-distance">—</strong></div></div>
+          <p class="arrival-note">Si abordas ahora, llegada aprox.: <strong id="ride-arrival">—</strong></p>
+          <p id="trip-status" class="field-help" role="status" aria-live="polite">Indica tu origen y el destino para planear el viaje.</p>
+          <details class="estimation-settings"><summary>Ajustar estimación <span aria-hidden="true">⌄</span></summary><label for="average-speed">Promedio supuesto del camión (km/h)</label><input id="average-speed" type="number" min="5" max="60" step="1" value="20"><p>Velocidad supuesta y editable. No incluye caminata, espera, tráfico ni detenciones. Los accesos a la ruta no son paraderos confirmados.</p></details>
+        </section>
+        <section class="vehicles-card" aria-labelledby="vehicle-heading"><div class="vehicles-heading"><svg class="icon"><use href="#i-bus"/></svg><h3 id="vehicle-heading">Camiones en el mapa</h3><span id="vehicle-count">0</span></div><p class="vehicle-mode" id="vehicle-mode">SIMULACIÓN · SIN GPS REAL</p><p id="vehicle-status" class="field-help" role="status">Cargando el tramo de simulación…</p><button id="pause-simulation" class="small-button" type="button" aria-pressed="false">Pausar simulación</button><button id="refresh-vehicles" class="small-button" type="button" hidden>Actualizar unidades</button></section>
+        <section class="incidents-card" aria-labelledby="incidents-heading"><h3 id="incidents-heading">¿Hay inconvenientes cerca?</h3><p id="incident-status" class="field-help" role="status">Activa Tráfico para consultar incidentes con un proveedor conectado.</p><ul id="incident-list" class="incident-list"></ul><p class="field-help incident-caveat">Se buscan avisos a menos de 100 m del trazado localizado. La proximidad no confirma una afectación al servicio del camión.</p></section>
         <div class="route-card">
           <div class="route-card-top"><span id="route-category" class="route-category">RUTA 01</span><span class="example-label">CALLES EN ORDEN</span></div>
           <h3 id="route-name">Campus III</h3><p id="route-description"></p>
@@ -49,23 +71,24 @@
         <div class="geometry-notice"><p id="geometry-status" role="status" aria-live="polite">Localizando las calles…</p><button id="retry-geometry" class="text-button" type="button" hidden>Reintentar trazado</button></div>
         <details class="reference-details connection-details" id="connection-details" hidden><summary>Enlaces por confirmar <span aria-hidden="true">⌄</span></summary><ul id="connection-list" class="connection-list"></ul></details>
         <p class="data-note" id="route-data-note"><svg class="icon"><use href="#i-info"/></svg><span>Solo se dibujan tramos sobre calles identificadas y entre cruces comprobados en OpenStreetMap. Los enlaces pendientes quedan sin unir. Falta precisar los cruces de inicio y final.</span></p>
-        <div class="traffic-card"><span class="traffic-icon"><svg class="icon"><use href="#i-layers"/></svg></span><div><h3>Antes de salir, revisa el tráfico</h3><p>Consulta reportes de incidentes y circulación en Waze.</p></div><button id="show-traffic" class="text-button" type="button">Consultar tráfico <svg class="icon"><use href="#i-arrow"/></svg></button></div>
       </aside>
       <div class="map-panel">
-        <div class="map-toolbar"><div class="view-switch" role="group" aria-label="Vista del mapa"><button id="route-view-button" class="view-button active" aria-pressed="true" type="button"><svg class="icon"><use href="#i-pin"/></svg> Recorrido</button><button id="traffic-view-button" class="view-button" aria-pressed="false" type="button"><svg class="icon"><use href="#i-layers"/></svg> Tráfico · Waze</button></div><span class="map-location">CIUDAD DEL CARMEN</span></div>
+        <div class="map-toolbar"><span class="single-map-label"><svg class="icon"><use href="#i-layers"/></svg> Ruta + camiones + tu viaje</span><label class="traffic-toggle"><input type="checkbox" id="traffic-toggle"> Tráfico</label></div>
+        <p class="traffic-status" id="traffic-status" role="status">El tráfico aún no está conectado. Puedes consultar reportes en Waze.</p>
         <div class="map-stage">
-          <div id="route-map" role="region" aria-label="Mapa del recorrido seleccionado"></div>
-          <div id="waze-panel" hidden><iframe id="waze-frame" title="Tráfico de Ciudad del Carmen en Waze" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe><div class="waze-note">Waze muestra tráfico vial; no calcula tiempos del camión ni dibuja esta ruta. Si no carga, usa «Abrir Waze».</div></div>
+          <div id="route-map" role="region" aria-label="Mapa del recorrido seleccionado" tabindex="0"></div>
           <div class="map-label" id="map-label"><span class="route-dot"></span><div><strong id="legend-name">Campus III</strong><span id="legend-status">Localizando calles…</span></div></div>
+          <span id="simulation-badge" class="simulation-badge">CAMIONES SIMULADOS · SIN GPS REAL</span>
+          <div class="pick-notice" id="pick-notice" hidden><span id="pick-instruction">Toca el mapa para elegir un punto.</span><button id="cancel-pick" type="button" aria-label="Cancelar selección de punto">×</button></div>
           <button class="center-button" id="center-map" type="button" title="Centrar recorrido" aria-label="Centrar el recorrido completo"><svg class="icon"><use href="#i-target"/></svg></button>
-          <div class="map-status" id="tile-notice" role="status" hidden>No se pudo cargar parte del mapa. Revisa tu conexión.<button id="retry-tiles" class="text-button" type="button">Recargar mapa</button></div>
+          <div class="map-status" id="tile-notice" role="status" hidden><span id="tile-notice-text">No se pudo cargar parte del mapa. Revisa tu conexión.</span><button id="retry-tiles" class="text-button" type="button">Recargar mapa</button></div>
         </div>
         <div class="map-footer"><p id="selection-status" role="status" aria-live="polite"></p><a id="waze-link" class="waze-link" target="_blank" rel="noopener noreferrer">Abrir Waze <svg class="icon"><use href="#i-arrow"/></svg><span class="sr-only"> (abre una pestaña nueva)</span></a></div>
       </div>
     </section>
-    <section class="how-it-works" id="como-funciona" aria-labelledby="how-title"><div><p class="eyebrow">ASÍ DE SENCILLO</p><h2 id="how-title">Planea tu próxima vuelta.</h2></div><div class="how-step"><span>01</span><p><strong>Selecciona una ruta</strong>El menú cambia el recorrido y su color.</p></div><div class="how-step"><span>02</span><p><strong>Ubícate en el mapa</strong>Acerca el mapa y explora sus referencias.</p></div><div class="how-step"><span>03</span><p><strong>Consulta el tráfico</strong>Revisa Waze antes de comenzar tu viaje.</p></div></section>
+    <section class="how-it-works" id="como-funciona" aria-labelledby="how-title"><div><p class="eyebrow">ASÍ DE SENCILLO</p><h2 id="how-title">Planea tu próxima vuelta.</h2></div><div class="how-step"><span>01</span><p><strong>Selecciona una ruta</strong>Las unidades simuladas recorren sus tramos.</p></div><div class="how-step"><span>02</span><p><strong>Elige origen y destino</strong>Usa tu ubicación, una dirección o el mapa.</p></div><div class="how-step"><span>03</span><p><strong>Estima tu viaje</strong>Solo en camión y siguiendo su recorrido.</p></div></section>
   </main>
-  <footer class="site-footer"><span class="footer-brand">UbiCarmen<span> · Hecho para movernos mejor.</span></span><span>Proyecto independiente · Sin ubicación de camiones en tiempo real</span></footer>
+  <footer class="site-footer"><span class="footer-brand">UbiCarmen<span> · Hecho para movernos mejor.</span></span><span id="footer-mode">Proyecto independiente · Simulación de camiones; no son posiciones GPS reales</span></footer>
   <noscript><p class="noscript">Activa JavaScript para elegir y visualizar las rutas.</p></noscript>
 </body>
 </html>

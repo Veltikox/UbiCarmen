@@ -1,6 +1,6 @@
 # UbiCarmen
 
-Página en **HTML, CSS y JavaScript** para consultar las rutas de Amor x Carmen en Ciudad del Carmen.
+Página en **HTML, CSS y JavaScript** para consultar las rutas de Amor x Carmen en Ciudad del Carmen, simular camiones y estimar viajes sobre su recorrido.
 
 ## Ejecutar
 
@@ -39,15 +39,29 @@ Se eliminaron las antiguas coordenadas ficticias. `street-geometry.js` consulta 
 
 Los datos de las calles de esta ciudad aún no pudieron verificarse desde el entorno de desarrollo porque su política de red bloqueó Overpass. Las pruebas geométricas usan datos sintéticos señalados como tales; no certifican la exactitud de las rutas reales. El navegador del usuario necesita acceder al servicio para cargar el trazado.
 
-## Tráfico
+## Camiones simulados y viajes
 
-La pestaña de Waze y el enlace externo muestran el área de la ruta. **Waze no dibuja estas rutas de camión ni devuelve su duración.** No se calcula un retraso ni se conoce la ubicación de los vehículos. Si el iframe no carga, está disponible el enlace externo.
+La página usa **un solo mapa**. Por petición del usuario, muestra tres camiones **simulados**, sin GPS real. Se mueven sobre un tramo conectado de la ruta; se pueden pausar y reanudar. Sin geometría disponible, la simulación espera la carga de las calles.
+
+Se puede elegir el origen con permiso de geolocalización o marcándolo en el mapa, y el destino mediante clic, coordenadas o una búsqueda de dirección. El viaje se dibuja en azul sobre el recorrido del camión, siguiendo su sentido. Se rechazan huecos, sentido contrario y puntos alejados.
+
+El tiempo incluye **solo el viaje en camión**. Se usa un promedio supuesto editable de **20 km/h**. No incluye caminata, espera, tráfico ni detenciones, y los accesos aproximados no representan paraderos confirmados. La hora de llegada supone abordar ahora.
+
+## Tráfico e incidentes en el mismo mapa
+
+Se retiró el iframe de Waze. Como su mapa incrustado no ofrece una API pública de capas para añadir estos recorridos y vehículos, se preparó una integración compatible de **TomTom**: flujo de tráfico, cierres, accidentes, obras y otros avisos cerca del trazado. Waze se conserva como enlace externo opcional.
+
+**Falta una clave pública de navegador de TomTom** en `config.js` para activar datos reales de tráfico e incidentes. No se inventan incidentes. Los avisos próximos no confirman por sí solos una afectación al servicio, no desvían la ruta y no modifican el tiempo supuesto. Un fallo se comunica como estado desconocido.
+
+Consulta [docs/live-data.md](docs/live-data.md) para configurar el proveedor, conocer las limitaciones del cálculo o sustituir la simulación por una API GPS autorizada en el futuro. No introduzcas secretos privados en archivos públicos.
 
 ## Acceso a Internet
 
 - `tile.openstreetmap.org`: cartografía base, con atribución.
 - `overpass-api.de`: calles, nodos de cruce y lugares. Sin claves; sujeto a disponibilidad y límites del servicio público.
-- `embed.waze.com`, `www.waze.com`: mapa externo de tráfico y sus recursos.
+- `nominatim.openstreetmap.org`: búsqueda explícita de direcciones.
+- `api.tomtom.com`: tráfico e incidentes cuando se configura una clave pública del proveedor.
+- `www.waze.com`: enlace externo opcional.
 
 Si Overpass falla, se conserva el itinerario completo y se ofrece «Reintentar trazado». Si falla la cartografía base, se ofrece «Recargar mapa» de manera independiente. No se desactiva la verificación TLS.
 
@@ -56,10 +70,11 @@ El uso de teselas públicas debe respetar la [política de OpenStreetMap](https:
 ## Verificación
 
 ```sh
-node --test tests/geometry.cjs
+node --test tests/geometry.cjs tests/trips.cjs
 node tests/browser.cjs
+node tests/journey-browser.cjs
 ```
 
-La segunda orden necesita el servidor arrancado y Playwright/Chromium disponibles. Se pueden configurar `TEST_BASE_URL` y `CHROMIUM_PATH`. Son herramientas de pruebas, no dependencias de la página.
+Las pruebas de navegador necesitan el servidor arrancado y Playwright/Chromium disponibles. Se pueden configurar `TEST_BASE_URL` y `CHROMIUM_PATH`. Son herramientas de pruebas, no dependencias de la página.
 
-Las pruebas comprueban el orden de las listas, cruces reales frente a cruces aparentes, rechazo de atajos y ramales, sentidos de circulación, separación de referencias, caché, cambios de ruta, respuestas tardías, colores, encuadre de Laguna en móvil y recuperación de errores. Los datos de `tests/fixtures/` son exclusivamente sintéticos; las respuestas externas se simulan en las pruebas de navegador.
+Las pruebas comprueban el orden de las listas, cruces reales frente a cruces aparentes, rechazo de atajos y ramales, sentidos de circulación, separación de referencias, caché, cambios de ruta, respuestas tardías, colores, encuadre de Laguna en móvil y recuperación de errores. Los datos de `tests/fixtures/` son exclusivamente sintéticos; las respuestas externas se simulan en las pruebas de navegador. También se comprueban movimiento/pausa, permisos de ubicación, búsquedas, duración sobre el itinerario y avisos próximos en un único mapa. Las pruebas no certifican disponibilidad externa ni exactitud geográfica operativa.

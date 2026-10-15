@@ -169,7 +169,7 @@
         states = newStates;
       }
       const chosen = [...states.values()].sort((a, b) => a.cost - b.cost)[0];
-      segments.push(...chosen.segments);
+      segments.push(...chosen.segments.map(segment => ({ ...segment, runId: boundary })));
       // A failed direction is a new run, never a line connecting separate runs.
       boundary = next;
     }

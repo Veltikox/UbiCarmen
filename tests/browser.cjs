@@ -29,7 +29,6 @@ async function main() {
     page.on('pageerror', error => errors.push(error.message));
     await page.route('https://tile.openstreetmap.org/**', fulfillTile);
     await page.route(endpoint, route => { requests++; return fulfillGeometry(route); });
-    await page.route('https://embed.waze.com/**', route => route.fulfill({ contentType: 'text/html', body: '<html lang="es"><title>Waze test fixture</title><p>External service fixture</p></html>' }));
     await page.goto(baseURL, { waitUntil: 'networkidle' });
     await waitForRoute(page);
 
@@ -41,7 +40,7 @@ async function main() {
       assert.equal(await page.locator('#stop-details').isVisible(), false);
       assert.equal(await page.locator('.leaflet-overlay-pane path').count(), countFor('campus'));
       assert.equal(await page.locator('#tile-notice').isVisible(), false);
-      assert.equal(await page.locator('#waze-frame').getAttribute('src'), null);
+      assert.equal(await page.locator('iframe').count(), 0);
     });
 
     await check('Laguna lists all 19 streets and 11 general references without adding stop detours', async () => {
@@ -74,22 +73,18 @@ async function main() {
       assert.equal(await page.locator('#stop-details').isVisible(), false);
     });
 
-    await check('Waze loads on demand, follows selection, and does not start car navigation', async () => {
-      await page.click('#traffic-view-button');
-      assert.equal(await page.locator('#waze-panel').isVisible(), true);
-      assert.equal(await page.locator('#route-map').isVisible(), false);
-      const initial = await page.locator('#waze-frame').getAttribute('src');
-      assert.equal(new URL(initial).hostname, 'embed.waze.com');
+    await check('one map retains routes and simulations when unconfigured traffic is requested', async () => {
       await page.selectOption('#route-select', 'campus'); await waitForRoute(page);
-      const src = new URL(await page.locator('#waze-frame').getAttribute('src'));
-      const link = new URL(await page.locator('#waze-link').getAttribute('href'));
-      assert.notEqual(src.href, initial);
-      assert.equal(link.hostname, 'www.waze.com');
-      assert.equal(src.searchParams.get('lat'), link.searchParams.get('lat'));
-      assert.equal(link.searchParams.has('navigate'), false);
-      await page.click('#route-view-button');
+      await page.click('#traffic-toggle');
+      assert.equal(await page.locator('#traffic-toggle').isChecked(), false);
+      assert.match(await page.locator('#traffic-status').textContent(), /no está conectada/);
       assert.equal(await page.locator('#route-map').isVisible(), true);
-      assert.equal(await page.locator('#legend-name').textContent(), 'Campus III');
+      assert.equal(await page.locator('iframe').count(), 0);
+      assert.equal(await page.locator('.leaflet-container').count(), 1);
+      assert.equal(await page.locator('.bus-marker.simulated').count(), 3);
+      const link = new URL(await page.locator('#waze-link').getAttribute('href'));
+      assert.equal(link.hostname, 'www.waze.com');
+      assert.equal(link.searchParams.has('navigate'), false);
     });
 
     await check('centering restores the full geographic extent after zooming', async () => {
@@ -117,18 +112,19 @@ async function main() {
         });
         assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth));
         const size = await page.locator('#route-map').boundingBox();
-        assert.ok(size.width > 200 && size.height >= 400);
+        assert.ok(size.width > 200 && size.height >= 350);
       }
     });
 
-    await check('keyboard route selection and traffic shortcut work without script errors', async () => {
+    await check('keyboard route selection and map picking work without script errors', async () => {
       await page.locator('#route-select').focus();
       await page.keyboard.press('Home'); await page.keyboard.press('ArrowDown'); await page.keyboard.press('Enter');
       await waitForRoute(page);
       assert.equal(await page.locator('#route-name').textContent(), 'Laguna de Términos');
-      await page.click('#show-traffic');
-      assert.equal(await page.locator('#waze-panel').isVisible(), true);
-      assert.equal(await page.locator('#traffic-view-button').evaluate(node => document.activeElement === node), true);
+      await page.click('#pick-destination');
+      assert.equal(await page.locator('#pick-notice').isVisible(), true);
+      await page.click('#cancel-pick');
+      assert.equal(await page.locator('#pick-notice').isVisible(), false);
       assert.deepEqual(errors, []);
     });
 
